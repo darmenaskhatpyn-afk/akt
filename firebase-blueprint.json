@@ -3,12 +3,14 @@
     "tasks": {
       "title": "Tasks",
       "description": "Portfolio tasks, practical and independent assignments",
-      "fields": {
+      "type": "object",
+      "properties": {
         "id": { "type": "string", "description": "Task identifier" },
         "title": { "type": "string", "description": "Task title" },
-        "theme": { "type": "string", "description": "Task theme / topic" },
+        "number": { "type": "number", "description": "Task sequence number" },
+        "topic": { "type": "string", "description": "Task theme / topic" },
         "category": { "type": "string", "description": "practical or independent" },
-        "type": { "type": "string", "description": "document, presentation, image, archive, other" },
+        "format": { "type": "string", "description": "pdf, word, pptx, zip, link, file" },
         "fileUrl": { "type": "string", "description": "Direct link to file" },
         "fileName": { "type": "string", "description": "Original file name" },
         "fileSize": { "type": "string", "description": "File size formatted" },
@@ -16,30 +18,53 @@
         "date": { "type": "string", "description": "Date formatted" },
         "completed": { "type": "boolean", "description": "Completed status" },
         "description": { "type": "string", "description": "Task description" },
-        "createdAt": { "type": "string", "description": "Creation timestamp" }
-      }
+        "link": { "type": "string", "description": "External task link" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Updated timestamp" }
+      },
+      "required": ["id", "title", "category"]
     },
     "profile": {
       "title": "Student Profile",
       "description": "Public student profile information",
-      "fields": {
+      "type": "object",
+      "properties": {
         "fullName": { "type": "string", "description": "Full name" },
+        "specialty": { "type": "string", "description": "Specialty" },
         "bio": { "type": "string", "description": "Bio description" },
         "city": { "type": "string", "description": "City" },
-        "photoUrl": { "type": "string", "description": "Profile picture URL" },
+        "avatarUrl": { "type": "string", "description": "Profile picture URL" },
         "updatedAt": { "type": "string", "description": "Last updated" }
-      }
+      },
+      "required": ["fullName"]
     },
-    "comments": {
-      "title": "Comments",
-      "description": "Visitor reviews and feedback",
-      "fields": {
-        "id": { "type": "string", "description": "Comment ID" },
-        "author": { "type": "string", "description": "Author name" },
-        "text": { "type": "string", "description": "Comment body" },
-        "rating": { "type": "number", "description": "Star rating" },
-        "date": { "type": "string", "description": "Date created" }
-      }
+    "feedbacks": {
+      "title": "Feedbacks",
+      "description": "Visitor reviews, grades and comments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Feedback ID" },
+        "senderName": { "type": "string", "description": "Author name" },
+        "role": { "type": "string", "description": "Teacher, Student, Guest" },
+        "message": { "type": "string", "description": "Feedback message" },
+        "rating": { "type": "number", "description": "Star rating 1-5" },
+        "createdAt": { "type": "string", "description": "Date created" }
+      },
+      "required": ["id", "senderName", "message", "rating"]
+    }
+  },
+  "firestore": {
+    "/tasks/{taskId}": {
+      "schema": "tasks",
+      "description": "Public collection storing practical and independent tasks"
+    },
+    "/profile/{docId}": {
+      "schema": "profile",
+      "description": "Student portfolio profile information"
+    },
+    "/feedbacks/{feedbackId}": {
+      "schema": "feedbacks",
+      "description": "Teacher and visitor feedback entries"
     }
   }
 }

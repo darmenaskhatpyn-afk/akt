@@ -13,10 +13,22 @@ service cloud.firestore {
       allow write: if true;
     }
 
-    // Comments collection: Visitors can read and post comments
+    // Feedbacks & Comments collection: Visitors can read and post feedback
+    match /feedbacks/{feedbackId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     match /comments/{commentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Test connection check
+    match /test/{docId} {
       allow read: if true;
       allow write: if true;
     }
   }
 }
+

@@ -1,13 +1,14 @@
 import React from 'react';
-import { ArrowUpRight, ExternalLink, FileText, Presentation, Globe, Eye, Check } from 'lucide-react';
+import { ArrowUpRight, ExternalLink, FileText, Presentation, Globe, Eye, Check, Trash2 } from 'lucide-react';
 import { TaskItem } from '../types';
 
 interface TaskCardProps {
   task: TaskItem;
   onSelect: (task: TaskItem) => void;
+  onDelete?: (task: TaskItem, e: React.MouseEvent) => void;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onSelect }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onSelect, onDelete }) => {
   const isPractical = task.category === 'practical';
 
   const getFormatBadge = (format: TaskItem['format']) => {
@@ -71,8 +72,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onSelect }) => {
           </span>
         </div>
 
-        {/* Completion Indicator */}
-        <div className="absolute top-3 right-3">
+        {/* Completion Indicator & Delete Button */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          {onDelete && (
+            <button
+              id={`task-card-top-del-${task.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(task, e);
+              }}
+              title="Файлды өшіру"
+              aria-label="Файлды өшіру"
+              className="w-7 h-7 rounded-lg bg-neutral-950/80 hover:bg-red-600 text-neutral-300 hover:text-white flex items-center justify-center backdrop-blur border border-neutral-700/80 transition-all cursor-pointer shadow-md"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
           <span className="w-7 h-7 rounded-full bg-emerald-500/90 text-neutral-950 flex items-center justify-center font-bold text-xs shadow-md">
             <Check className="w-4 h-4 stroke-[3]" />
           </span>
@@ -95,26 +110,41 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onSelect }) => {
           </p>
         </div>
 
-        {/* Action Buttons (Matches Wix exact "Тапсырмаға өту" button) */}
+        {/* Action Buttons (Matches Wix exact "Тапсырмаға өту" button + Preview + Delete) */}
         <div className="pt-2 border-t border-neutral-800/80 flex items-center gap-2">
           <button
             id={`task-btn-go-${task.id}`}
             onClick={handleOpenTask}
-            className="flex-1 py-2.5 px-4 rounded-xl bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 border border-amber-500/30 transition-all cursor-pointer"
+            className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-neutral-950 font-bold text-xs flex items-center justify-center gap-1.5 border border-amber-500/30 transition-all cursor-pointer truncate"
           >
-            <span>Тапсырмаға өту</span>
-            <ArrowUpRight className="w-4 h-4" />
+            <span className="truncate">Тапсырмаға өту</span>
+            <ArrowUpRight className="w-4 h-4 flex-shrink-0" />
           </button>
 
           <button
             id={`task-btn-preview-${task.id}`}
             onClick={() => onSelect(task)}
             title="Толық сипаттамасын ашу"
-            className="p-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 transition-colors cursor-pointer"
+            className="p-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 transition-colors cursor-pointer flex-shrink-0"
             aria-label="Сипаттамасын көру"
           >
             <Eye className="w-4 h-4" />
           </button>
+
+          {onDelete && (
+            <button
+              id={`task-btn-delete-${task.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(task, e);
+              }}
+              title="Файлды өшіру"
+              className="p-2.5 rounded-xl bg-neutral-800/80 hover:bg-red-500/20 text-neutral-400 hover:text-red-400 border border-neutral-700 hover:border-red-500/40 transition-colors cursor-pointer flex-shrink-0"
+              aria-label="Файлды өшіру"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

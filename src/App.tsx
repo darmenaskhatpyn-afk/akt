@@ -16,7 +16,7 @@ import { PasswordAuthModal } from './components/PasswordAuthModal';
 import { studentProfile as initialStudentProfile } from './data/tasks';
 import { TaskItem, TaskCategory, StudentProfile } from './types';
 import { ArrowUp } from 'lucide-react';
-import { fetchTasksFromSupabase } from './lib/supabase';
+import { fetchTasksFromSupabase, deleteTask } from './lib/supabase';
 import {
   subscribeToTasks,
   deleteTaskFromFirebase,
@@ -137,20 +137,63 @@ export default function App() {
     });
   };
 
-  const handleDeleteTask = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isEditor) {
-      setIsAuthModalOpen(true);
-      return;
+  const handleDeleteTask = async (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
     }
-    if (confirm('Бұл файлды тізімнен өшіргіңіз келе ме?')) {
+
+    const targetTask = tasks.find((t) => t.id === id);
+    const taskTitle = targetTask ? targetTask.title : 'Бұл файл';
+
+    // Егер редактор режимі қосылмаған болса, құпиясөз сұрау (8888)
+    if (!isEditor) {
+      const pwd = window.prompt(
+        `«${taskTitle}» файлын өшіру үшін құпиясөзді енгізіңіз (құпиясөз: 8888):`
+      );
+      if (pwd === null) {
+        // Пайдаланушы бас тартты
+        return;
+      }
+      if (pwd.trim() === '8888') {
+        setIsEditor(true);
+        localStorage.setItem('portfolio_is_editor_session', 'true');
+      } else {
+        alert('Құпиясөз қате! Файлды өшіру үшін 8888 құпиясөзі қажет.');
+        setIsAuthModalOpen(true);
+        return;
+      }
+    }
+
+    const confirmDelete = window.confirm(
+      `«${taskTitle}» файлын портфолиодан біржола өшіргіңіз келетініне сенімдісіз бе?`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      // 1. Жергілікті күйден дереу өшіру
       setTasks((prev) => {
         const updated = prev.filter((t) => t.id !== id);
-        localStorage.setItem('user_portfolio_tasks', JSON.stringify(updated));
+        try {
+          localStorage.setItem('user_portfolio_tasks', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
         return updated;
       });
-      // Delete from Firebase Firestore
+
+      // 2. Егер модаль терезеде осы файл ашық тұрса, жабу
+      if (selectedTask?.id === id) {
+        setSelectedTask(null);
+      }
+
+      // 3. Firebase Firestore бұлттық базасынан өшіру (барлық қолданушылар үшін)
       await deleteTaskFromFirebase(id);
+
+      // 4. Supabase және local custom tasks-тен өшіру (және storage-ден тазалау)
+      await deleteTask(id, targetTask?.fileUrl);
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      alert('Файлды өшіру кезінде қате орын алды.');
     }
   };
 
@@ -214,7 +257,7 @@ export default function App() {
                 onSelectTask={setSelectedTask}
                 searchQuery={searchQuery}
                 onOpenUpload={() => handleOpenUpload('practical')}
-                onDeleteTask={isEditor ? handleDeleteTask : undefined}
+                onDeleteTask={handleDeleteTask}
               />
             </section>
 
@@ -227,7 +270,7 @@ export default function App() {
                 onSelectTask={setSelectedTask}
                 searchQuery={searchQuery}
                 onOpenUpload={() => handleOpenUpload('independent')}
-                onDeleteTask={isEditor ? handleDeleteTask : undefined}
+                onDeleteTask={handleDeleteTask}
               />
             </section>
 
@@ -262,7 +305,7 @@ export default function App() {
               onSelectTask={setSelectedTask}
               searchQuery={searchQuery}
               onOpenUpload={() => handleOpenUpload('practical')}
-              onDeleteTask={isEditor ? handleDeleteTask : undefined}
+              onDeleteTask={handleDeleteTask}
             />
           </div>
         )}
@@ -277,7 +320,7 @@ export default function App() {
               onSelectTask={setSelectedTask}
               searchQuery={searchQuery}
               onOpenUpload={() => handleOpenUpload('independent')}
-              onDeleteTask={isEditor ? handleDeleteTask : undefined}
+              onDeleteTask={handleDeleteTask}
             />
           </div>
         )}
@@ -297,7 +340,11 @@ export default function App() {
       </footer>
 
       {/* Тапсырманы қарау модаль терезесі */}
-      <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} />
+      <TaskModal
+        task={selectedTask}
+        onClose={() => setSelectedTask(null)}
+        onDelete={(task) => handleDeleteTask(task.id)}
+      />
 
       {/* Файлды тікелей салу модаль терезесі */}
       <SimpleUploadModal

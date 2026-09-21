@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { X, ExternalLink, Download, FileText, CheckCircle2, Copy, Check, Sparkles, BookOpen, Share2 } from 'lucide-react';
+import { X, ExternalLink, Download, FileText, CheckCircle2, Copy, Check, Sparkles, BookOpen, Share2, Trash2 } from 'lucide-react';
 import { TaskItem } from '../types';
 
 interface TaskModalProps {
   task: TaskItem | null;
   onClose: () => void;
+  onDelete?: (task: TaskItem) => void;
 }
 
-export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
+export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onDelete }) => {
   const [copied, setCopied] = useState(false);
 
   if (!task) return null;
@@ -165,16 +166,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
                   </div>
                 </div>
               </div>
-              <a
-                href={task.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                download={task.fileName || true}
-                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Жүктеу</span>
-              </a>
+              <div className="flex items-center gap-2">
+                <a
+                  href={task.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download={task.fileName || true}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Жүктеу</span>
+                </a>
+                {onDelete && (
+                  <button
+                    id="modal-box-delete-btn"
+                    onClick={() => onDelete(task)}
+                    className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Бұл файлды өшіру"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Өшіру</span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -224,23 +238,37 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
 
         {/* Modal Footer Actions */}
         <div className="p-6 bg-neutral-950 border-t border-neutral-800 flex flex-wrap items-center justify-between gap-3">
-          <button
-            id="modal-copy-link-btn"
-            onClick={handleCopy}
-            className="px-4 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white text-xs font-medium border border-neutral-800 flex items-center gap-2 transition-colors cursor-pointer"
-          >
-            {copied ? (
-              <>
-                <Check className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-400">Сілтеме көшірілді!</span>
-              </>
-            ) : (
-              <>
-                <Share2 className="w-4 h-4 text-neutral-400" />
-                <span>Сілтемені көшіру</span>
-              </>
+          <div className="flex items-center gap-2">
+            <button
+              id="modal-copy-link-btn"
+              onClick={handleCopy}
+              className="px-4 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white text-xs font-medium border border-neutral-800 flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span className="text-emerald-400">Сілтеме көшірілді!</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-4 h-4 text-neutral-400" />
+                  <span>Сілтемені көшіру</span>
+                </>
+              )}
+            </button>
+
+            {onDelete && (
+              <button
+                id="modal-footer-delete-btn"
+                onClick={() => onDelete(task)}
+                className="px-3.5 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white text-xs font-bold border border-red-500/30 flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                title="Файлды портфолиодан өшіру"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Файлды өшіру</span>
+              </button>
             )}
-          </button>
+          </div>
 
           <div className="flex items-center gap-3">
             <button

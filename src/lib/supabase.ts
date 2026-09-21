@@ -313,9 +313,34 @@ export async function saveTask(taskData: {
 }
 
 /**
- * Delete a task
+ * Delete a file from Supabase Storage
  */
-export async function deleteTask(taskId: string): Promise<boolean> {
+export async function deleteStorageFile(fileUrl?: string): Promise<boolean> {
+  if (!fileUrl) return false;
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const match = fileUrl.match(/\/portfolio-files\/(.+)$/);
+    if (match && match[1]) {
+      const filePath = decodeURIComponent(match[1].split('?')[0]);
+      await client.storage.from(BUCKET_NAME).remove([filePath]);
+      return true;
+    }
+  } catch (err) {
+    console.warn('Failed to remove file from Supabase storage:', err);
+  }
+  return false;
+}
+
+/**
+ * Delete a task and its attached storage file
+ */
+export async function deleteTask(taskId: string, fileUrl?: string): Promise<boolean> {
+  if (fileUrl) {
+    await deleteStorageFile(fileUrl);
+  }
+
   const client = getSupabaseClient();
   if (client && !taskId.startsWith('local-')) {
     try {

@@ -115,17 +115,11 @@ export const TasksGrid: React.FC<TasksGridProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTasks.map((task) => (
             <div key={task.id} className="relative group">
-              <TaskCard task={task} onSelect={onSelectTask} />
-              {onDeleteTask && (
-                <button
-                  onClick={(e) => onDeleteTask(task.id, e)}
-                  className="absolute top-3 right-12 z-20 p-1.5 rounded-lg bg-neutral-950/80 hover:bg-red-500 text-neutral-400 hover:text-white border border-neutral-700 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
-                  title="Өшіру"
-                  aria-label="Тапсырманы өшіру"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <TaskCard
+                task={task}
+                onSelect={onSelectTask}
+                onDelete={onDeleteTask ? (t, e) => onDeleteTask(t.id, e) : undefined}
+              />
             </div>
           ))}
         </div>

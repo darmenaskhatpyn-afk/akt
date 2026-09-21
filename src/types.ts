@@ -19,6 +19,7 @@ export interface TaskItem {
   fileSize?: string;
   badge?: string;
   date?: string;
+  createdAt?: string;
   objectives?: string[];
   keyPoints?: string[];
   isCustom?: boolean;

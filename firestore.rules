@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Tasks collection: Anyone can read, anyone can create or modify
+    match /tasks/{taskId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Profile collection: Public read and write for portfolio owner
+    match /profile/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Comments collection: Visitors can read and post comments
+    match /comments/{commentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

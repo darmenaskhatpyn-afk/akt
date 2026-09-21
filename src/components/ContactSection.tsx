@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Phone, MapPin, Instagram, Youtube, Send, Star, MessageSquare, Check, Sparkles, Heart } from 'lucide-react';
 import { StudentProfile, FeedbackEntry } from '../types';
+import { saveFeedbackToFirebase, subscribeToFeedbacks } from '../lib/firebase';
 
 interface ContactSectionProps {
   profile: StudentProfile;
@@ -41,14 +42,15 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ profile }) => {
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('mereke_portfolio_feedback', JSON.stringify(feedbacks));
-    } catch {
-      // ignore
-    }
-  }, [feedbacks]);
+    const unsubscribe = subscribeToFeedbacks((remoteFeedbacks) => {
+      if (remoteFeedbacks && remoteFeedbacks.length > 0) {
+        setFeedbacks(remoteFeedbacks);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !message.trim()) return;
 
@@ -65,6 +67,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ profile }) => {
     setName('');
     setMessage('');
     setSubmitted(true);
+    await saveFeedbackToFirebase(newFeedback);
     setTimeout(() => setSubmitted(false), 4000);
   };
 

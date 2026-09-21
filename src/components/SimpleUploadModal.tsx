@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { TaskCategory, TaskFormat, TaskItem } from '../types';
 import { saveTask, uploadTaskFile } from '../lib/supabase';
+import { saveTaskToFirebase } from '../lib/firebase';
 
 interface SimpleUploadModalProps {
   isOpen: boolean;
@@ -107,6 +108,9 @@ export const SimpleUploadModal: React.FC<SimpleUploadModalProps> = ({
         fileSize,
         link: customLink.trim() || fileUrl,
       });
+
+      // Save to Firebase Firestore cloud database (so all other visitors see it)
+      await saveTaskToFirebase(res.task);
 
       onTaskCreated(res.task);
       setSuccessMessage('Файл сәтті жүктелді!');

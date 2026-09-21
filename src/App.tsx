@@ -17,6 +17,12 @@ import { studentProfile as initialStudentProfile } from './data/tasks';
 import { TaskItem, TaskCategory, StudentProfile } from './types';
 import { ArrowUp } from 'lucide-react';
 import { fetchTasksFromSupabase } from './lib/supabase';
+import {
+  subscribeToTasks,
+  deleteTaskFromFirebase,
+  subscribeToProfile,
+  saveProfileToFirebase,
+} from './lib/firebase';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('home');
@@ -53,7 +59,7 @@ export default function App() {
     localStorage.removeItem('portfolio_is_editor_session');
   };
 
-  // Динамикалық жеке профиль деректері (localStorage-та сақталады)
+  // Динамикалық жеке профиль деректері (бұлттық базамен және localStorage-пен синхрондалады)
   const [profile, setProfile] = useState<StudentProfile>(() => {
     try {
       const saved = localStorage.getItem('user_portfolio_profile');
@@ -66,16 +72,33 @@ export default function App() {
     return initialStudentProfile;
   });
 
-  const handleProfileSave = (updatedProfile: StudentProfile) => {
+  // Profile real-time synchronization from Firebase
+  useEffect(() => {
+    const unsubProfile = subscribeToProfile((cloudProfile) => {
+      if (cloudProfile && cloudProfile.fullName) {
+        setProfile(cloudProfile);
+        try {
+          localStorage.setItem('user_portfolio_profile', JSON.stringify(cloudProfile));
+        } catch {
+          // ignore
+        }
+      }
+    });
+    return () => unsubProfile();
+  }, []);
+
+  const handleProfileSave = async (updatedProfile: StudentProfile) => {
     setProfile(updatedProfile);
     try {
       localStorage.setItem('user_portfolio_profile', JSON.stringify(updatedProfile));
     } catch {
       // ignore
     }
+    // Save to Firebase so everyone sees the updated profile
+    await saveProfileToFirebase(updatedProfile);
   };
 
-  // Файлдар тізімі (бастапқыда бос, пайдаланушы салған кезде сақталады)
+  // Файлдар тізімі (Firebase бұлттық базасы арқылы кез келген адамға бірдей көрінеді)
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
     try {
       const saved = localStorage.getItem('user_portfolio_tasks');
@@ -85,21 +108,26 @@ export default function App() {
     }
   });
 
-  const loadCloudTasks = useCallback(async () => {
-    try {
-      const res = await fetchTasksFromSupabase();
-      if (res.tasks && res.tasks.length > 0) {
-        setTasks(res.tasks);
-        localStorage.setItem('user_portfolio_tasks', JSON.stringify(res.tasks));
-      }
-    } catch (err) {
-      console.warn('Cloud tasks sync:', err);
-    }
-  }, []);
-
+  // Real-time listener for tasks from Firebase
   useEffect(() => {
-    loadCloudTasks();
-  }, [loadCloudTasks]);
+    const unsubTasks = subscribeToTasks((cloudTasks) => {
+      if (cloudTasks && cloudTasks.length > 0) {
+        setTasks(cloudTasks);
+        localStorage.setItem('user_portfolio_tasks', JSON.stringify(cloudTasks));
+      }
+    });
+
+    // Fallback initial load
+    fetchTasksFromSupabase()
+      .then((res) => {
+        if (res.tasks && res.tasks.length > 0) {
+          setTasks((prev) => (prev.length > 0 ? prev : res.tasks));
+        }
+      })
+      .catch((err) => console.warn('Supabase fetch fallback:', err));
+
+    return () => unsubTasks();
+  }, []);
 
   const handleTaskCreated = (newTask: TaskItem) => {
     setTasks((prev) => {
@@ -109,7 +137,7 @@ export default function App() {
     });
   };
 
-  const handleDeleteTask = (id: string, e: React.MouseEvent) => {
+  const handleDeleteTask = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isEditor) {
       setIsAuthModalOpen(true);
@@ -121,6 +149,8 @@ export default function App() {
         localStorage.setItem('user_portfolio_tasks', JSON.stringify(updated));
         return updated;
       });
+      // Delete from Firebase Firestore
+      await deleteTaskFromFirebase(id);
     }
   };
 

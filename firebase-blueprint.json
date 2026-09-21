@@ -51,6 +51,19 @@
         "createdAt": { "type": "string", "description": "Date created" }
       },
       "required": ["id", "senderName", "message", "rating"]
+    },
+    "task_files": {
+      "title": "Task Files",
+      "description": "Cross-user file payloads and base64 document contents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "File or Task ID" },
+        "fileName": { "type": "string", "description": "Original file name" },
+        "mimeType": { "type": "string", "description": "MIME type of file" },
+        "fileData": { "type": "string", "description": "Base64 encoded dataURL" },
+        "createdAt": { "type": "string", "description": "Upload timestamp" }
+      },
+      "required": ["id", "fileName", "fileData"]
     }
   },
   "firestore": {
@@ -65,6 +78,10 @@
     "/feedbacks/{feedbackId}": {
       "schema": "feedbacks",
       "description": "Teacher and visitor feedback entries"
+    },
+    "/task_files/{fileId}": {
+      "schema": "task_files",
+      "description": "Shared task documents accessible to any visitor"
     }
   }
 }

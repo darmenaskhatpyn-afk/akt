@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { X, ExternalLink, Download, FileText, CheckCircle2, Copy, Check, Sparkles, BookOpen, Share2, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ExternalLink, Download, FileText, CheckCircle2, Copy, Check, Sparkles, BookOpen, Share2, Trash2, Loader2 } from 'lucide-react';
 import { TaskItem } from '../types';
+import { openTaskFile, downloadFile } from '../lib/fileViewer';
+import { getTaskFileFromFirebase } from '../lib/firebase';
 
 interface TaskModalProps {
   task: TaskItem | null;
@@ -10,6 +12,31 @@ interface TaskModalProps {
 
 export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onDelete }) => {
   const [copied, setCopied] = useState(false);
+  const [cloudFileData, setCloudFileData] = useState<{ fileName: string; fileData: string; mimeType: string } | null>(null);
+  const [isLoadingCloudFile, setIsLoadingCloudFile] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (task && task.id) {
+      // Check if file is stored in Firebase task_files collection
+      setIsLoadingCloudFile(true);
+      getTaskFileFromFirebase(task.id)
+        .then((res) => {
+          if (isMounted) {
+            setCloudFileData(res);
+            setIsLoadingCloudFile(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setIsLoadingCloudFile(false);
+        });
+    } else {
+      setCloudFileData(null);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [task?.id]);
 
   if (!task) return null;
 
@@ -19,6 +46,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onDelete })
     navigator.clipboard.writeText(task.link || window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownload = () => {
+    if (cloudFileData && cloudFileData.fileData) {
+      downloadFile(cloudFileData.fileData, cloudFileData.fileName || task.fileName || `${task.title}.${task.format}`);
+      return;
+    }
+    const targetUrl = task.fileUrl || task.link;
+    downloadFile(targetUrl, task.fileName || `${task.title}.${task.format}`);
+  };
+
+  const handleOpenAction = () => {
+    if (cloudFileData && cloudFileData.fileData) {
+      openTaskFile({
+        link: cloudFileData.fileData,
+        fileUrl: cloudFileData.fileData,
+        fileName: cloudFileData.fileName,
+        format: task.format,
+        title: task.title,
+      });
+      return;
+    }
+    openTaskFile(task);
   };
 
   const getActionDetails = () => {
@@ -167,16 +217,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onDelete })
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={task.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download={task.fileName || true}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow"
+                <button
+                  id="modal-box-download-btn"
+                  onClick={handleDownload}
+                  className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow"
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  {isLoadingCloudFile ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
                   <span>Жүктеу</span>
-                </a>
+                </button>
                 {onDelete && (
                   <button
                     id="modal-box-delete-btn"
@@ -279,16 +331,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onDelete })
               Жабу
             </button>
 
-            <a
+            <button
               id="modal-action-btn"
-              href={task.link}
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={handleOpenAction}
               className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
             >
               <span>{action.btnText}</span>
               <ActionIcon className="w-4 h-4" />
-            </a>
+            </button>
           </div>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import React from 'react';
 import { ArrowUpRight, ExternalLink, FileText, Presentation, Globe, Eye, Check, Trash2 } from 'lucide-react';
 import { TaskItem } from '../types';
+import { openTaskFile } from '../lib/fileViewer';
+import { getTaskFileFromFirebase } from '../lib/firebase';
 
 interface TaskCardProps {
   task: TaskItem;
@@ -34,11 +36,29 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onSelect, onDelete }) 
 
   const badgeInfo = getFormatBadge(task.format);
 
-  const handleOpenTask = (e: React.MouseEvent) => {
+  const handleOpenTask = async (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    // Check if cloud file data exists in Firestore for any visitor
+    try {
+      const cloudFile = await getTaskFileFromFirebase(task.id);
+      if (cloudFile && cloudFile.fileData) {
+        openTaskFile({
+          link: cloudFile.fileData,
+          fileUrl: cloudFile.fileData,
+          fileName: cloudFile.fileName,
+          format: task.format,
+          title: task.title,
+        });
+        return;
+      }
+    } catch {
+      // ignore and fallback
+    }
+
     const targetUrl = task.fileUrl || task.link;
     if (targetUrl && targetUrl !== '#') {
-      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      openTaskFile(task);
     } else {
       onSelect(task);
     }

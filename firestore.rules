@@ -24,6 +24,12 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // Task files collection: Shared files stored as public data chunks
+    match /task_files/{fileId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // Test connection check
     match /test/{docId} {
       allow read: if true;

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { TaskCategory, TaskFormat, TaskItem } from '../types';
 import { saveTask, uploadTaskFile } from '../lib/supabase';
-import { saveTaskToFirebase } from '../lib/firebase';
+import { saveTaskToFirebase, saveTaskFileToFirebase } from '../lib/firebase';
 
 interface SimpleUploadModalProps {
   isOpen: boolean;
@@ -89,11 +89,22 @@ export const SimpleUploadModal: React.FC<SimpleUploadModalProps> = ({
       let fileName = '';
       let fileSize = '';
 
+      let rawDataUrl = '';
+
       if (selectedFile) {
         const uploadRes = await uploadTaskFile(selectedFile);
         fileUrl = uploadRes.url;
         fileName = uploadRes.fileName;
         fileSize = uploadRes.fileSize;
+
+        // Convert file to Data URL if small enough (< 800KB) for direct Firestore storage
+        if (selectedFile.size < 800 * 1024) {
+          rawDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(selectedFile);
+          });
+        }
       }
 
       const res = await saveTask({
@@ -111,6 +122,16 @@ export const SimpleUploadModal: React.FC<SimpleUploadModalProps> = ({
 
       // Save to Firebase Firestore cloud database (so all other visitors see it)
       await saveTaskToFirebase(res.task);
+
+      // If file data is available, save to task_files in Firestore so every other device can read it
+      if (rawDataUrl) {
+        await saveTaskFileToFirebase(
+          res.task.id,
+          fileName,
+          rawDataUrl,
+          selectedFile?.type || 'application/octet-stream'
+        );
+      }
 
       onTaskCreated(res.task);
       setSuccessMessage('Файл сәтті жүктелді!');
@@ -262,16 +283,22 @@ export const SimpleUploadModal: React.FC<SimpleUploadModalProps> = ({
 
           {/* Optional Link */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-neutral-300">
-              Немесе сілтеме (міндетті емес):
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-neutral-300">
+                Немесе сыртқы сілтеме (Google Drive / Canva / т.б.):
+              </label>
+              <span className="text-[10px] text-amber-400">Міндетті емес</span>
+            </div>
             <input
               type="url"
-              placeholder="https://docs.google.com/..."
+              placeholder="https://docs.google.com/... немесе кез келген сілтеме"
               value={customLink}
               onChange={(e) => setCustomLink(e.target.value)}
               className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500"
             />
+            <p className="text-[11px] text-neutral-500">
+              💡 Кеңес: Егер файлды осы жерден тікелей таңдасаңыз, ол бұлттық базаға сақталып, кез келген адамға тікелей ашылатын болады.
+            </p>
           </div>
 
           {/* Submit */}

@@ -53,6 +53,68 @@ const TASKS_COL = 'tasks';
 const PROFILE_COL = 'profile';
 const PROFILE_DOC = 'main_profile';
 const FEEDBACKS_COL = 'feedbacks';
+const TASK_FILES_COL = 'task_files';
+
+/**
+ * Save file payload to Firebase Firestore so all visitors can access and download it
+ */
+export async function saveTaskFileToFirebase(
+  taskId: string,
+  fileName: string,
+  fileData: string,
+  mimeType: string
+): Promise<boolean> {
+  try {
+    const fileRef = doc(db, TASK_FILES_COL, taskId);
+    await setDoc(fileRef, {
+      id: taskId,
+      fileName,
+      fileData,
+      mimeType,
+      createdAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (err) {
+    console.error('Failed to save file payload to Firebase:', err);
+    return false;
+  }
+}
+
+/**
+ * Retrieve file payload from Firebase Firestore for any visitor
+ */
+export async function getTaskFileFromFirebase(
+  taskId: string
+): Promise<{ fileName: string; fileData: string; mimeType: string } | null> {
+  try {
+    const snap = await getDoc(doc(db, TASK_FILES_COL, taskId));
+    if (snap.exists()) {
+      const d = snap.data();
+      return {
+        fileName: d.fileName || 'file',
+        fileData: d.fileData || '',
+        mimeType: d.mimeType || 'application/octet-stream',
+      };
+    }
+    return null;
+  } catch (err) {
+    console.error('Failed to get file from Firebase:', err);
+    return null;
+  }
+}
+
+/**
+ * Delete task file payload from Firebase
+ */
+export async function deleteTaskFileFromFirebase(taskId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, TASK_FILES_COL, taskId));
+    return true;
+  } catch (err) {
+    console.warn('Failed to delete file payload from Firebase:', err);
+    return false;
+  }
+}
 
 /**
  * Fetch all tasks from Firebase Firestore
@@ -132,6 +194,7 @@ export async function saveTaskToFirebase(task: TaskItem): Promise<boolean> {
 export async function deleteTaskFromFirebase(taskId: string): Promise<boolean> {
   try {
     await deleteDoc(doc(db, TASKS_COL, taskId));
+    await deleteTaskFileFromFirebase(taskId);
     return true;
   } catch (err) {
     console.error('Failed to delete task from Firebase:', err);

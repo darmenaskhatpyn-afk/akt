@@ -186,22 +186,9 @@ export async function uploadTaskFile(file: File): Promise<{
         isLive: true,
       };
     } catch (err: any) {
-      console.warn('Supabase upload failed, falling back to local object URL:', err);
-      // Create local fallback preview URL (dataURL for persistent viewing if small, or objectURL)
-      let fallbackUrl = '';
-      if (file.size < 6 * 1024 * 1024) {
-        fallbackUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = () => resolve(URL.createObjectURL(file));
-          reader.readAsDataURL(file);
-        });
-      } else {
-        fallbackUrl = URL.createObjectURL(file);
-      }
-
+      console.warn('Supabase upload failed, proceeding with cloud and local storage:', err);
       return {
-        url: fallbackUrl,
+        url: '',
         fileName: file.name,
         fileSize: sizeFormatted,
         isLive: false,
@@ -209,21 +196,9 @@ export async function uploadTaskFile(file: File): Promise<{
     }
   }
 
-  // Fallback if Supabase is not configured yet
-  let fallbackUrl = '';
-  if (file.size < 6 * 1024 * 1024) {
-    fallbackUrl = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(URL.createObjectURL(file));
-      reader.readAsDataURL(file);
-    });
-  } else {
-    fallbackUrl = URL.createObjectURL(file);
-  }
-
+  // Supabase is not configured - file payload will be handled by IndexedDB and Firebase
   return {
-    url: fallbackUrl,
+    url: '',
     fileName: file.name,
     fileSize: sizeFormatted,
     isLive: false,
@@ -356,26 +331,73 @@ export async function deleteTask(taskId: string, fileUrl?: string): Promise<bool
   return true;
 }
 
+// Safe LocalStorage helpers that will never crash with QuotaExceededError
+export function safeLocalStorageSet(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err: any) {
+    console.warn(`localStorage.setItem failed for key "${key}":`, err);
+    try {
+      // If quota exceeded, clean up large base64 strings and try again
+      if (key === LOCAL_CUSTOM_TASKS_KEY || key === 'user_portfolio_tasks') {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          const stripped = parsed.map(sanitizeTaskForStorage);
+          localStorage.setItem(key, JSON.stringify(stripped));
+          return true;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  }
+}
+
+export function sanitizeTaskForStorage(task: TaskItem): TaskItem {
+  const clean = { ...task };
+  // Never save huge data URLs (> 2KB) in 5MB localStorage
+  if (typeof clean.fileUrl === 'string' && clean.fileUrl.startsWith('data:') && clean.fileUrl.length > 2000) {
+    clean.fileUrl = '';
+  }
+  if (typeof clean.link === 'string' && clean.link.startsWith('data:') && clean.link.length > 2000) {
+    clean.link = '#';
+  }
+  return clean;
+}
+
 // Local storage helpers
 export function getLocalCustomTasks(): TaskItem[] {
   try {
     const raw = localStorage.getItem(LOCAL_CUSTOM_TASKS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const list: TaskItem[] = JSON.parse(raw);
+    return Array.isArray(list) ? list.map(sanitizeTaskForStorage) : [];
   } catch {
     return [];
   }
 }
 
 export function saveLocalCustomTask(task: TaskItem) {
-  const existing = getLocalCustomTasks();
-  const updated = [task, ...existing];
-  localStorage.setItem(LOCAL_CUSTOM_TASKS_KEY, JSON.stringify(updated));
+  try {
+    const existing = getLocalCustomTasks();
+    const sanitized = sanitizeTaskForStorage(task);
+    const updated = [sanitized, ...existing.filter((t) => t.id !== task.id).map(sanitizeTaskForStorage)];
+    safeLocalStorageSet(LOCAL_CUSTOM_TASKS_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn('saveLocalCustomTask warning:', err);
+  }
 }
 
 export function removeLocalCustomTask(taskId: string) {
-  const existing = getLocalCustomTasks();
-  const updated = existing.filter((t) => t.id !== taskId);
-  localStorage.setItem(LOCAL_CUSTOM_TASKS_KEY, JSON.stringify(updated));
+  try {
+    const existing = getLocalCustomTasks();
+    const updated = existing.filter((t) => t.id !== taskId).map(sanitizeTaskForStorage);
+    safeLocalStorageSet(LOCAL_CUSTOM_TASKS_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn('removeLocalCustomTask warning:', err);
+  }
 }
 
 export const SUPABASE_SQL_SETUP_GUIDE = `-- 1. Supabase SQL Editor-де осы скриптті орындаңыз:

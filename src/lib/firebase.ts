@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { TaskItem, StudentProfile, FeedbackEntry } from '../types';
+import { saveFileToIndexedDB, getFileFromIndexedDB, deleteFileFromIndexedDB } from './indexedDbStorage';
 
 // Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -56,7 +57,8 @@ const FEEDBACKS_COL = 'feedbacks';
 const TASK_FILES_COL = 'task_files';
 
 /**
- * Save file payload to Firebase Firestore so all visitors can access and download it
+ * Save file payload to Firebase Firestore (with chunking for large files like 2.7MB PDF)
+ * and IndexedDB for instantaneous local access
  */
 export async function saveTaskFileToFirebase(
   taskId: string,
@@ -64,15 +66,64 @@ export async function saveTaskFileToFirebase(
   fileData: string,
   mimeType: string
 ): Promise<boolean> {
+  // 1. Immediately cache in IndexedDB (handles files up to hundreds of MB locally)
   try {
-    const fileRef = doc(db, TASK_FILES_COL, taskId);
-    await setDoc(fileRef, {
+    await saveFileToIndexedDB({
       id: taskId,
       fileName,
       fileData,
       mimeType,
+      updatedAt: Date.now(),
+    });
+  } catch (err) {
+    console.warn('Failed saving to IndexedDB:', err);
+  }
+
+  // 2. Save to Firestore with chunking if large
+  try {
+    const CHUNK_SIZE = 400000; // ~400KB per chunk, well within Firestore's 1MB doc limit
+    if (fileData.length <= CHUNK_SIZE) {
+      // Small file, save in a single doc
+      const fileRef = doc(db, TASK_FILES_COL, taskId);
+      await setDoc(fileRef, {
+        id: taskId,
+        fileName,
+        fileData,
+        mimeType,
+        totalChunks: 1,
+        createdAt: new Date().toISOString(),
+      });
+      return true;
+    }
+
+    // Large file: split into multiple chunks
+    const totalChunks = Math.ceil(fileData.length / CHUNK_SIZE);
+    
+    // Write metadata document
+    const fileRef = doc(db, TASK_FILES_COL, taskId);
+    await setDoc(fileRef, {
+      id: taskId,
+      fileName,
+      mimeType,
+      fileData: '', // actual payload is in chunk docs
+      totalChunks,
       createdAt: new Date().toISOString(),
     });
+
+    // Write chunk docs in parallel
+    const chunkPromises = [];
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkStr = fileData.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const chunkRef = doc(db, TASK_FILES_COL, `${taskId}_c_${i}`);
+      chunkPromises.push(
+        setDoc(chunkRef, {
+          taskId,
+          chunkIndex: i,
+          data: chunkStr,
+        })
+      );
+    }
+    await Promise.all(chunkPromises);
     return true;
   } catch (err) {
     console.error('Failed to save file payload to Firebase:', err);
@@ -81,21 +132,74 @@ export async function saveTaskFileToFirebase(
 }
 
 /**
- * Retrieve file payload from Firebase Firestore for any visitor
+ * Retrieve file payload from IndexedDB first, or Firebase Firestore (reassembling chunks)
  */
 export async function getTaskFileFromFirebase(
   taskId: string
 ): Promise<{ fileName: string; fileData: string; mimeType: string } | null> {
+  // 1. Try IndexedDB first (0ms latency, works offline)
   try {
-    const snap = await getDoc(doc(db, TASK_FILES_COL, taskId));
-    if (snap.exists()) {
-      const d = snap.data();
+    const cached = await getFileFromIndexedDB(taskId);
+    if (cached && cached.fileData) {
       return {
-        fileName: d.fileName || 'file',
-        fileData: d.fileData || '',
-        mimeType: d.mimeType || 'application/octet-stream',
+        fileName: cached.fileName,
+        fileData: cached.fileData,
+        mimeType: cached.mimeType,
       };
     }
+  } catch {
+    // continue to Firebase
+  }
+
+  // 2. Fetch from Firebase Firestore
+  try {
+    const snap = await getDoc(doc(db, TASK_FILES_COL, taskId));
+    if (!snap.exists()) {
+      return null;
+    }
+
+    const d = snap.data();
+    const fileName = d.fileName || 'file';
+    const mimeType = d.mimeType || 'application/octet-stream';
+
+    // Check if it's a single doc
+    if (d.fileData && (!d.totalChunks || d.totalChunks <= 1)) {
+      // Cache into IndexedDB
+      saveFileToIndexedDB({ id: taskId, fileName, fileData: d.fileData, mimeType, updatedAt: Date.now() }).catch(() => {});
+      return {
+        fileName,
+        fileData: d.fileData,
+        mimeType,
+      };
+    }
+
+    // Multi-chunk document
+    const totalChunks = Number(d.totalChunks) || 0;
+    if (totalChunks > 1) {
+      const chunkPromises = [];
+      for (let i = 0; i < totalChunks; i++) {
+        chunkPromises.push(getDoc(doc(db, TASK_FILES_COL, `${taskId}_c_${i}`)));
+      }
+      const chunkSnaps = await Promise.all(chunkPromises);
+      let completeData = '';
+      for (let i = 0; i < totalChunks; i++) {
+        const s = chunkSnaps[i];
+        if (s.exists()) {
+          completeData += s.data().data || '';
+        }
+      }
+
+      if (completeData) {
+        // Cache in IndexedDB for subsequent immediate loads
+        saveFileToIndexedDB({ id: taskId, fileName, fileData: completeData, mimeType, updatedAt: Date.now() }).catch(() => {});
+        return {
+          fileName,
+          fileData: completeData,
+          mimeType,
+        };
+      }
+    }
+
     return null;
   } catch (err) {
     console.error('Failed to get file from Firebase:', err);
@@ -104,10 +208,30 @@ export async function getTaskFileFromFirebase(
 }
 
 /**
- * Delete task file payload from Firebase
+ * Delete task file payload from Firebase and local cache
  */
 export async function deleteTaskFileFromFirebase(taskId: string): Promise<boolean> {
   try {
+    deleteFileFromIndexedDB(taskId).catch(() => {});
+
+    // Check if multi-chunk
+    try {
+      const snap = await getDoc(doc(db, TASK_FILES_COL, taskId));
+      if (snap.exists()) {
+        const d = snap.data();
+        const totalChunks = Number(d.totalChunks) || 0;
+        if (totalChunks > 1) {
+          const delPromises = [];
+          for (let i = 0; i < totalChunks; i++) {
+            delPromises.push(deleteDoc(doc(db, TASK_FILES_COL, `${taskId}_c_${i}`)));
+          }
+          await Promise.all(delPromises);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     await deleteDoc(doc(db, TASK_FILES_COL, taskId));
     return true;
   } catch (err) {

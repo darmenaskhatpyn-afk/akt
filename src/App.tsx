@@ -16,7 +16,7 @@ import { PasswordAuthModal } from './components/PasswordAuthModal';
 import { studentProfile as initialStudentProfile } from './data/tasks';
 import { TaskItem, TaskCategory, StudentProfile } from './types';
 import { ArrowUp } from 'lucide-react';
-import { fetchTasksFromSupabase, deleteTask } from './lib/supabase';
+import { fetchTasksFromSupabase, deleteTask, safeLocalStorageSet, sanitizeTaskForStorage } from './lib/supabase';
 import {
   subscribeToTasks,
   deleteTaskFromFirebase,
@@ -113,7 +113,7 @@ export default function App() {
     const unsubTasks = subscribeToTasks((cloudTasks) => {
       if (cloudTasks && cloudTasks.length > 0) {
         setTasks(cloudTasks);
-        localStorage.setItem('user_portfolio_tasks', JSON.stringify(cloudTasks));
+        safeLocalStorageSet('user_portfolio_tasks', JSON.stringify(cloudTasks.map(sanitizeTaskForStorage)));
       }
     });
 
@@ -132,7 +132,7 @@ export default function App() {
   const handleTaskCreated = (newTask: TaskItem) => {
     setTasks((prev) => {
       const updated = [newTask, ...prev.filter((t) => t.id !== newTask.id)];
-      localStorage.setItem('user_portfolio_tasks', JSON.stringify(updated));
+      safeLocalStorageSet('user_portfolio_tasks', JSON.stringify(updated.map(sanitizeTaskForStorage)));
       return updated;
     });
   };
@@ -173,11 +173,7 @@ export default function App() {
       // 1. Жергілікті күйден дереу өшіру
       setTasks((prev) => {
         const updated = prev.filter((t) => t.id !== id);
-        try {
-          localStorage.setItem('user_portfolio_tasks', JSON.stringify(updated));
-        } catch {
-          // ignore
-        }
+        safeLocalStorageSet('user_portfolio_tasks', JSON.stringify(updated.map(sanitizeTaskForStorage)));
         return updated;
       });
 

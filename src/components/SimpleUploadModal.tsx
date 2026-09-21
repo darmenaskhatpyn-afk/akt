@@ -97,16 +97,18 @@ export const SimpleUploadModal: React.FC<SimpleUploadModalProps> = ({
         fileName = uploadRes.fileName;
         fileSize = uploadRes.fileSize;
 
-        // Convert file to Data URL if small enough (< 800KB) for direct Firestore storage
-        if (selectedFile.size < 800 * 1024) {
-          rawDataUrl = await new Promise<string>((resolve) => {
+        // Convert file to Data URL for IndexedDB and chunked Firebase storage (supports up to 15MB)
+        if (selectedFile.size <= 15 * 1024 * 1024) {
+          rawDataUrl = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error('Файлды оқу мүмкін болмады'));
             reader.readAsDataURL(selectedFile);
           });
         }
       }
 
+      // Save task item (with clean URL metadata, without giant strings that blow up 5MB quota)
       const res = await saveTask({
         category,
         number: Number(number) || 1,
@@ -114,16 +116,16 @@ export const SimpleUploadModal: React.FC<SimpleUploadModalProps> = ({
         topic: category === 'practical' ? 'Практикалық жұмыс' : 'Өзіндік жұмыс',
         description: description.trim() || (selectedFile ? `Жүктелген файл: ${selectedFile.name}` : 'Тапсырма файлы'),
         format,
-        fileUrl,
+        fileUrl: customLink.trim() ? customLink.trim() : (fileUrl || ''),
         fileName,
         fileSize,
-        link: customLink.trim() || fileUrl,
+        link: customLink.trim() || '#',
       });
 
-      // Save to Firebase Firestore cloud database (so all other visitors see it)
+      // Save to Firebase Firestore tasks collection
       await saveTaskToFirebase(res.task);
 
-      // If file data is available, save to task_files in Firestore so every other device can read it
+      // Save file binary payload into Firebase task_files (multi-chunk) and IndexedDB
       if (rawDataUrl) {
         await saveTaskFileToFirebase(
           res.task.id,
@@ -134,7 +136,7 @@ export const SimpleUploadModal: React.FC<SimpleUploadModalProps> = ({
       }
 
       onTaskCreated(res.task);
-      setSuccessMessage('Файл сәтті жүктелді!');
+      setSuccessMessage('Файл сәтті жүктелді және барлық құрылғыларға қолжетімді болды!');
 
       setTimeout(() => {
         onClose();

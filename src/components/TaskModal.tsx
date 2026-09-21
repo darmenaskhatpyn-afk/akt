@@ -48,16 +48,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onDelete })
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (cloudFileData && cloudFileData.fileData) {
       downloadFile(cloudFileData.fileData, cloudFileData.fileName || task.fileName || `${task.title}.${task.format}`);
       return;
+    }
+    setIsLoadingCloudFile(true);
+    try {
+      const res = await getTaskFileFromFirebase(task.id);
+      if (res && res.fileData) {
+        setCloudFileData(res);
+        downloadFile(res.fileData, res.fileName || task.fileName || `${task.title}.${task.format}`);
+        return;
+      }
+    } catch (e) {
+      console.warn('Download fetch error:', e);
+    } finally {
+      setIsLoadingCloudFile(false);
     }
     const targetUrl = task.fileUrl || task.link;
     downloadFile(targetUrl, task.fileName || `${task.title}.${task.format}`);
   };
 
-  const handleOpenAction = () => {
+  const handleOpenAction = async () => {
     if (cloudFileData && cloudFileData.fileData) {
       openTaskFile({
         link: cloudFileData.fileData,
@@ -67,6 +80,25 @@ export const TaskModal: React.FC<TaskModalProps> = ({ task, onClose, onDelete })
         title: task.title,
       });
       return;
+    }
+    setIsLoadingCloudFile(true);
+    try {
+      const res = await getTaskFileFromFirebase(task.id);
+      if (res && res.fileData) {
+        setCloudFileData(res);
+        openTaskFile({
+          link: res.fileData,
+          fileUrl: res.fileData,
+          fileName: res.fileName,
+          format: task.format,
+          title: task.title,
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('Open action fetch error:', e);
+    } finally {
+      setIsLoadingCloudFile(false);
     }
     openTaskFile(task);
   };
